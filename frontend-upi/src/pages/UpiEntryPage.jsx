@@ -1,241 +1,201 @@
 import { useState } from "react";
-
 import { useNavigate } from "react-router-dom";
 
 function UpiEntryPage() {
 
     const navigate = useNavigate();
 
-    const [upiId, setUpiId] =
-        useState("");
+    const [upiId, setUpiId] = useState("");
 
     const handleContinue = () => {
-
         if (!upiId) return;
-
-        localStorage.setItem(
-            "upiId",
-            upiId
-        );
-
+        localStorage.setItem("upiId", upiId);
         navigate("/pay");
     };
 
     return (
-
         <div
             className="
-
                 min-h-screen
-
-                bg-gradient-to-br
-                from-[#020617]
-                via-[#071224]
-                to-[#020617]
-
+                bg-[#060d17]
                 flex
+                flex-col
                 items-center
                 justify-center
-
-                overflow-hidden
+                p-6
                 relative
-
-                p-5
+                overflow-hidden
             "
         >
 
-            {/* BACKGROUND GLOW */}
-
+            {/* SUBTLE GLOW */}
             <div
                 className="
-
                     absolute
-
-                    w-[500px]
-                    h-[500px]
-
-                    bg-blue-500/10
-
-                    blur-3xl
-
+                    top-[-100px]
+                    left-1/2
+                    -translate-x-1/2
+                    w-[600px]
+                    h-[400px]
+                    bg-blue-900/20
+                    blur-[120px]
                     rounded-full
+                    pointer-events-none
                 "
             />
 
-            {/* CARD */}
-
+            {/* LOGO AREA */}
             <div
                 className="
-
-                    relative
-
-                    w-full
-                    max-w-md
-
-                    bg-[#0f172a]/80
-
-                    backdrop-blur-2xl
-
-                    border
-                    border-blue-400/10
-
-                    rounded-[32px]
-
-                    shadow-2xl
-                    shadow-blue-500/10
-
-                    p-8
+                    flex
+                    flex-col
+                    items-center
+                    mb-12
                 "
             >
-
-                {/* TOP ICON */}
-
                 <div
                     className="
-
                         w-16
                         h-16
-
                         rounded-2xl
-
-                        bg-blue-500/10
-
+                        bg-[#0d2137]
                         border
-                        border-blue-400/20
-
+                        border-blue-800/40
                         flex
                         items-center
                         justify-center
-
-                        mb-8
+                        mb-5
+                        shadow-lg
+                        shadow-blue-900/30
                     "
                 >
-
-                    <div
-                        className="
-
-                            w-7
-                            h-7
-
-                            rounded-full
-
-                            bg-blue-400
-
-                            shadow-lg
-                            shadow-blue-400/40
-                        "
-                    />
-
+                    <svg
+                        className="w-8 h-8 text-blue-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+                        />
+                    </svg>
                 </div>
-
-                {/* TITLE */}
 
                 <h1
                     className="
-
-                        text-4xl
-                        font-bold
-
-                        text-slate-100
-
-                        mb-3
+                        text-[22px]
+                        font-700
+                        text-white
+                        tracking-tight
                     "
                 >
-
-                    Secure UPI
-
+                    SecurePay
                 </h1>
 
                 <p
                     className="
-
-                        text-slate-400
-
-                        mb-10
+                        text-[13px]
+                        text-slate-500
+                        mt-1
+                        font-400
                     "
                 >
+                    Fast · Secure · Reliable
+                </p>
+            </div>
 
-                    AI-powered fraud protected payments
+            {/* CARD */}
+            <div
+                className="
+                    w-full
+                    max-w-[380px]
+                    bg-[#0b1623]
+                    border
+                    border-[#1a2d42]
+                    rounded-3xl
+                    p-7
+                    shadow-2xl
+                    shadow-black/50
+                "
+            >
+                <h2
+                    className="
+                        text-[20px]
+                        font-700
+                        text-white
+                        mb-1
+                        tracking-tight
+                    "
+                >
+                    Enter your UPI ID
+                </h2>
 
+                <p
+                    className="
+                        text-[13px]
+                        text-slate-500
+                        mb-7
+                        font-400
+                    "
+                >
+                    Use the UPI ID linked to your bank account
                 </p>
 
                 {/* INPUT */}
+                <div className="relative mb-5">
+                    <input
+                        type="text"
+                        placeholder="yourname@bank"
+                        value={upiId}
+                        onChange={(e) => setUpiId(e.target.value)}
+                        onKeyDown={(e) =>
+                            e.key === "Enter" && handleContinue()
+                        }
+                        className="
+                            w-full
+                            bg-[#0d1f30]
+                            border
+                            border-[#1e3448]
+                            focus:border-blue-600
+                            text-white
+                            text-[15px]
+                            font-400
+                            placeholder-slate-600
+                            rounded-2xl
+                            px-4
+                            py-4
+                            outline-none
+                            transition-all
+                            duration-200
+                        "
+                    />
+                </div>
 
-                <input
-                    type="text"
-
-                    placeholder="Enter your UPI ID"
-
-                    value={upiId}
-
-                    onChange={(e) =>
-                        setUpiId(
-                            e.target.value
-                        )
-                    }
-
-                    className="
-
-                        w-full
-
-                        bg-black/20
-
-                        border
-                        border-blue-400/10
-
-                        focus:border-blue-400
-
-                        text-slate-100
-
-                        placeholder-slate-500
-
-                        rounded-2xl
-
-                        p-4
-
-                        outline-none
-
-                        transition-all
-                        duration-300
-                    "
-                />
-
-                {/* BUTTON */}
-
+                {/* CONTINUE BUTTON */}
                 <button
-
                     onClick={handleContinue}
-
+                    disabled={!upiId}
                     className="
-
                         w-full
-
-                        mt-8
-
-                        bg-blue-500
-
-                        hover:bg-blue-400
-
+                        bg-blue-600
+                        hover:bg-blue-500
+                        active:bg-blue-700
+                        disabled:opacity-40
+                        disabled:cursor-not-allowed
                         text-white
-
-                        font-semibold
-
+                        text-[15px]
+                        font-600
                         py-4
-
                         rounded-2xl
-
                         transition-all
-                        duration-300
-
-                        shadow-lg
-                        shadow-blue-500/20
-
-                        hover:scale-[1.02]
+                        duration-200
+                        tracking-tight
                     "
                 >
-
                     Continue
-
                 </button>
 
             </div>
