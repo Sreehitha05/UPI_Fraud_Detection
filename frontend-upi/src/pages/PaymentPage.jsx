@@ -1,568 +1,238 @@
-import { useState } from "react";
-import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { generateOtp, processPayment } from "../services/api";
+import AppLayout from "../components/AppLayout";
+import { mapPaymentMessage } from "../utils/statusLabels";
+import { deductBalance } from "../utils/account";
 
 function PaymentPage() {
-
     const navigate = useNavigate();
+    const loggedInUser = localStorage.getItem("upiId");
 
-    const loggedInUser =
-        localStorage.getItem("upiId");
+    const [mobile, setMobile] = useState(
+        () => localStorage.getItem("mobile") || ""
+    );
+    const [receiver, setReceiver] = useState("");
+    const [amount, setAmount] = useState("");
+    const [otp, setOtp] = useState("");
+    const [message, setMessage] = useState("");
+    const [messageType, setMessageType] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [otpLoading, setOtpLoading] = useState(false);
+    const [otpSent, setOtpSent] = useState(false);
 
-    if (!loggedInUser) {
-        navigate("/");
-    }
+    useEffect(() => {
+        if (!loggedInUser) {
+            navigate("/", { replace: true });
+        }
+    }, [loggedInUser, navigate]);
 
-    const [formData, setFormData] =
-        useState({
-            receiver: "",
-            amount: "",
-            otp: ""
-        });
+    const handleSendOtp = async () => {
+        const digits = mobile.replace(/\D/g, "");
 
-    const [generatedOtp, setGeneratedOtp] =
-        useState("");
+        if (digits.length !== 10) {
+            setMessage("Enter your 10-digit mobile number first");
+            setMessageType("error");
+            return;
+        }
 
-    const [message, setMessage] =
-        useState("");
+        try {
+            setOtpLoading(true);
+            setMessage("");
+            localStorage.setItem("mobile", digits);
 
-    const [loading, setLoading] =
-        useState(false);
+            const { data } = await generateOtp({
+                sender: loggedInUser,
+                mobile: digits
+            });
 
-    const handleChange = (e) => {
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value
-        });
+            setOtpSent(true);
+            setMessage(data.message);
+            setMessageType("info");
+        } catch (error) {
+            setMessage(
+                error.response?.data?.message || "Could not send OTP"
+            );
+            setMessageType("error");
+        } finally {
+            setOtpLoading(false);
+        }
     };
 
-    const generateOtp = () => {
-        const otp =
-            Math.floor(
-                1000 + Math.random() * 9000
-            ).toString();
-        setGeneratedOtp(otp);
-        setMessage(`OTP Generated: ${otp}`);
-    };
+    const handlePay = async () => {
+        const digits = mobile.replace(/\D/g, "");
 
-    const handlePayment = async () => {
-        if (formData.otp !== generatedOtp) {
-            setMessage("Invalid OTP");
+        if (!receiver.trim() || !amount || !otp.trim() || digits.length !== 10) {
+            setMessage("Fill receiver, amount, mobile, and OTP");
+            setMessageType("error");
+            return;
+        }
+
+        if (!otpSent) {
+            setMessage("Tap Send OTP before paying");
+            setMessageType("error");
             return;
         }
 
         try {
             setLoading(true);
+            setMessage("");
 
-            const response =
-                await axios.post(
-                    "http://localhost:5000/pay",
-                    {
-                        sender: loggedInUser,
-                        ...formData
-                    }
-                );
+            const { data } = await processPayment({
+                sender: loggedInUser,
+                receiver: receiver.trim(),
+                amount: Number(amount),
+                otp: otp.trim(),
+                mobile: digits
+            });
 
-            setMessage(response.data.message);
+            setMessage(mapPaymentMessage(data));
+            setMessageType(
+                data.status === "SUCCESS"
+                    ? "success"
+                    : data.status === "MFA"
+                    ? "warning"
+                    : "error"
+            );
 
+            if (data.status === "SUCCESS") {
+                deductBalance(loggedInUser, Number(amount));
+            }
         } catch (error) {
-            setMessage("Payment Failed");
+            setMessage(
+                error.response?.data?.message ||
+                    "Payment could not be completed"
+            );
+            setMessageType("error");
         } finally {
             setLoading(false);
         }
     };
 
-    const isSuccess =
-        message.includes("Successful");
+    if (!loggedInUser) return null;
 
-    const isError =
-        message.includes("Fraud") ||
-        message.includes("Failed") ||
-        message.includes("Invalid");
+    const inputClass =
+        "mt-2 w-full bg-[#0d1f30] border border-[#1e3448] rounded-xl px-4 py-3.5 text-white outline-none focus:border-blue-600";
 
-    const isOtp =
-        message.includes("OTP");
+    const bannerClass =
+        messageType === "success"
+            ? "bg-emerald-900/30 text-emerald-300 border-emerald-800/40"
+            : messageType === "warning"
+            ? "bg-amber-900/30 text-amber-200 border-amber-800/40"
+            : messageType === "error"
+            ? "bg-red-900/30 text-red-300 border-red-800/40"
+            : "bg-blue-900/30 text-blue-200 border-blue-800/40";
 
     return (
-        <div
-            className="
-                min-h-screen
-                bg-[#060d17]
-                flex
-                flex-col
-                items-center
-                justify-center
-                p-6
-                relative
-                overflow-hidden
-            "
-        >
-            {/* GLOW */}
-            <div
-                className="
-                    absolute
-                    top-[-100px]
-                    left-1/2
-                    -translate-x-1/2
-                    w-[600px]
-                    h-[400px]
-                    bg-blue-900/20
-                    blur-[120px]
-                    rounded-full
-                    pointer-events-none
-                "
-            />
+        <AppLayout variant="dark" showBack onBack={() => navigate("/home")}>
+            <div className="px-5 py-6">
+                <h1 className="text-xl font-bold text-white mb-6">Send money</h1>
 
-            {/* BACK + HEADER */}
-            <div
-                className="
-                    w-full
-                    max-w-[420px]
-                    mb-5
-                    flex
-                    items-center
-                    gap-3
-                "
-            >
-                <button
-                    onClick={() => navigate("/")}
-                    className="
-                        w-9
-                        h-9
-                        rounded-xl
-                        bg-[#0b1623]
-                        border
-                        border-[#1a2d42]
-                        flex
-                        items-center
-                        justify-center
-                        text-slate-400
-                        hover:text-white
-                        transition-colors
-                        duration-200
-                    "
-                >
-                    <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                    >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M15.75 19.5L8.25 12l7.5-7.5"
-                        />
-                    </svg>
-                </button>
-
-                <div>
-                    <h1
-                        className="
-                            text-[16px]
-                            font-600
-                            text-white
-                            tracking-tight
-                        "
-                    >
-                        Send Money
-                    </h1>
-                    <p
-                        className="
-                            text-[12px]
-                            text-slate-500
-                        "
-                    >
-                        via UPI
-                    </p>
-                </div>
-            </div>
-
-            {/* MAIN CARD */}
-            <div
-                className="
-                    w-full
-                    max-w-[420px]
-                    bg-[#0b1623]
-                    border
-                    border-[#1a2d42]
-                    rounded-3xl
-                    overflow-hidden
-                    shadow-2xl
-                    shadow-black/50
-                "
-            >
-                {/* SENDER STRIP */}
-                <div
-                    className="
-                        px-6
-                        py-5
-                        border-b
-                        border-[#1a2d42]
-                        flex
-                        items-center
-                        gap-3
-                    "
-                >
-                    <div
-                        className="
-                            w-10
-                            h-10
-                            rounded-full
-                            bg-blue-900/50
-                            border
-                            border-blue-800/50
-                            flex
-                            items-center
-                            justify-center
-                            text-blue-300
-                            text-[14px]
-                            font-700
-                            shrink-0
-                        "
-                    >
-                        {loggedInUser?.charAt(0).toUpperCase()}
+                <div className="bg-[#0b1623] rounded-2xl border border-[#1a2d42] p-4 mb-5 flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-full bg-blue-600/30 text-blue-300 font-bold flex items-center justify-center">
+                        {loggedInUser.charAt(0).toUpperCase()}
                     </div>
-
-                    <div>
-                        <p
-                            className="
-                                text-[11px]
-                                text-slate-500
-                                font-400
-                            "
-                        >
-                            Paying from
-                        </p>
-                        <p
-                            className="
-                                text-[14px]
-                                text-blue-300
-                                font-500
-                                mt-0.5
-                            "
-                        >
-                            {loggedInUser}
-                        </p>
-                    </div>
-
-                    <div
-                        className="
-                            ml-auto
-                            flex
-                            items-center
-                            gap-1.5
-                            bg-green-900/20
-                            border
-                            border-green-800/30
-                            rounded-full
-                            px-3
-                            py-1
-                        "
-                    >
-                        <div
-                            className="
-                                w-1.5
-                                h-1.5
-                                rounded-full
-                                bg-green-400
-                            "
-                        />
-                        <span
-                            className="
-                                text-[11px]
-                                text-green-400
-                                font-500
-                            "
-                        >
-                            Verified
-                        </span>
+                    <div className="min-w-0">
+                        <p className="text-xs text-slate-500">From</p>
+                        <p className="text-sm font-medium text-white truncate">{loggedInUser}</p>
                     </div>
                 </div>
 
-                {/* FORM AREA */}
-                <div className="px-6 py-6 space-y-5">
-
-                    {/* RECEIVER */}
+                <div className="space-y-4">
                     <div>
-                        <label
-                            className="
-                                block
-                                text-[12px]
-                                font-500
-                                text-slate-400
-                                mb-2
-                                uppercase
-                                tracking-wide
-                            "
-                        >
-                            Receiver UPI ID
-                        </label>
+                        <label className="text-xs font-medium text-slate-500 uppercase">Mobile number</label>
+                        <input
+                            type="tel"
+                            inputMode="numeric"
+                            maxLength={10}
+                            placeholder="10-digit mobile"
+                            value={mobile}
+                            onChange={(e) => {
+                                setMobile(e.target.value.replace(/\D/g, "").slice(0, 10));
+                                setOtpSent(false);
+                            }}
+                            className={inputClass}
+                        />
+                        <p className="text-[11px] text-slate-600 mt-1">
+                            OTP sent to this number — check backend terminal in demo
+                        </p>
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-medium text-slate-500 uppercase">To (UPI ID)</label>
                         <input
                             type="text"
-                            name="receiver"
-                            placeholder="receiver@bank"
-                            value={formData.receiver}
-                            onChange={handleChange}
-                            className="
-                                w-full
-                                bg-[#0d1f30]
-                                border
-                                border-[#1e3448]
-                                focus:border-blue-600
-                                text-white
-                                text-[15px]
-                                font-400
-                                placeholder-slate-600
-                                rounded-2xl
-                                px-4
-                                py-3.5
-                                outline-none
-                                transition-all
-                                duration-200
-                            "
+                            placeholder="friend@paytm"
+                            value={receiver}
+                            onChange={(e) => setReceiver(e.target.value)}
+                            className={inputClass}
                         />
                     </div>
 
-                    {/* AMOUNT */}
                     <div>
-                        <label
-                            className="
-                                block
-                                text-[12px]
-                                font-500
-                                text-slate-400
-                                mb-2
-                                uppercase
-                                tracking-wide
-                            "
-                        >
-                            Amount
-                        </label>
-                        <div className="relative">
-                            <span
-                                className="
-                                    absolute
-                                    left-4
-                                    top-1/2
-                                    -translate-y-1/2
-                                    text-slate-400
-                                    text-[18px]
-                                    font-500
-                                "
-                            >
-                                ₹
-                            </span>
+                        <label className="text-xs font-medium text-slate-500 uppercase">Amount</label>
+                        <div className="relative mt-2">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">₹</span>
                             <input
                                 type="number"
-                                name="amount"
-                                placeholder="0"
-                                value={formData.amount}
-                                onChange={handleChange}
-                                className="
-                                    w-full
-                                    bg-[#0d1f30]
-                                    border
-                                    border-[#1e3448]
-                                    focus:border-blue-600
-                                    text-white
-                                    text-[22px]
-                                    font-600
-                                    placeholder-slate-700
-                                    rounded-2xl
-                                    pl-9
-                                    pr-4
-                                    py-3.5
-                                    outline-none
-                                    transition-all
-                                    duration-200
-                                    tracking-tight
-                                "
+                                min="1"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                                className={`${inputClass} pl-9 text-xl font-semibold`}
                             />
                         </div>
                     </div>
 
-                    {/* OTP ROW */}
                     <div>
-                        <label
-                            className="
-                                block
-                                text-[12px]
-                                font-500
-                                text-slate-400
-                                mb-2
-                                uppercase
-                                tracking-wide
-                            "
-                        >
-                            UPI PIN / OTP
-                        </label>
-                        <div
-                            className="
-                                flex
-                                gap-3
-                            "
-                        >
+                        <label className="text-xs font-medium text-slate-500 uppercase">OTP</label>
+                        <div className="flex gap-2 mt-2">
                             <input
                                 type="password"
-                                name="otp"
-                                placeholder="● ● ● ●"
-                                value={formData.otp}
-                                onChange={handleChange}
-                                className="
-                                    flex-1
-                                    bg-[#0d1f30]
-                                    border
-                                    border-[#1e3448]
-                                    focus:border-blue-600
-                                    text-white
-                                    text-[18px]
-                                    font-500
-                                    placeholder-slate-700
-                                    rounded-2xl
-                                    px-4
-                                    py-3.5
-                                    outline-none
-                                    transition-all
-                                    duration-200
-                                    tracking-widest
-                                "
+                                inputMode="numeric"
+                                maxLength={4}
+                                placeholder="4-digit OTP"
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value)}
+                                className={`flex-1 ${inputClass} mt-0 tracking-widest`}
                             />
                             <button
-                                onClick={generateOtp}
-                                className="
-                                    bg-[#0d1f30]
-                                    border
-                                    border-[#1e3448]
-                                    hover:border-blue-700
-                                    hover:bg-[#0f2540]
-                                    text-blue-400
-                                    text-[13px]
-                                    font-500
-                                    px-4
-                                    rounded-2xl
-                                    transition-all
-                                    duration-200
-                                    whitespace-nowrap
-                                "
+                                type="button"
+                                onClick={handleSendOtp}
+                                disabled={otpLoading}
+                                className="shrink-0 px-4 rounded-xl border border-blue-600 text-blue-400 font-medium text-sm disabled:opacity-50"
                             >
-                                Get OTP
+                                {otpLoading ? "…" : "Send OTP"}
                             </button>
                         </div>
                     </div>
-
                 </div>
 
-                {/* MESSAGE */}
                 {message && (
-                    <div
-                        className="
-                            mx-6
-                            mb-4
-                        "
-                    >
-                        <div
-                            className={`
-                                flex
-                                items-center
-                                gap-2.5
-                                px-4
-                                py-3
-                                rounded-xl
-                                text-[13px]
-                                font-500
-                                ${
-                                    isSuccess
-                                    ? "bg-green-900/20 border border-green-800/30 text-green-400"
-                                    : isError
-                                    ? "bg-red-900/20 border border-red-800/30 text-red-400"
-                                    : "bg-blue-900/20 border border-blue-800/30 text-blue-400"
-                                }
-                            `}
-                        >
-                            <span>
-                                {isSuccess ? "✓" : isError ? "✕" : "○"}
-                            </span>
+                    <div className="mt-5 space-y-2">
+                        <p className={`text-sm px-4 py-3 rounded-xl border ${bannerClass}`}>
                             {message}
-                        </div>
+                        </p>
+                        {messageType === "success" && (
+                            <Link
+                                to="/history"
+                                className="block text-center text-sm font-medium text-[#2563eb]"
+                            >
+                                View in payment history →
+                            </Link>
+                        )}
                     </div>
                 )}
 
-                {/* PAY BUTTON */}
-                <div className="px-6 pb-6">
-                    <button
-                        onClick={handlePayment}
-                        disabled={loading}
-                        className="
-                            w-full
-                            bg-blue-600
-                            hover:bg-blue-500
-                            active:bg-blue-700
-                            disabled:opacity-50
-                            disabled:cursor-not-allowed
-                            text-white
-                            text-[15px]
-                            font-600
-                            py-4
-                            rounded-2xl
-                            transition-all
-                            duration-200
-                            tracking-tight
-                            flex
-                            items-center
-                            justify-center
-                            gap-2
-                        "
-                    >
-                        {loading ? (
-                            <>
-                                <svg
-                                    className="w-4 h-4 animate-spin"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <circle
-                                        className="opacity-25"
-                                        cx="12"
-                                        cy="12"
-                                        r="10"
-                                        stroke="currentColor"
-                                        strokeWidth="4"
-                                    />
-                                    <path
-                                        className="opacity-75"
-                                        fill="currentColor"
-                                        d="M4 12a8 8 0 018-8v8z"
-                                    />
-                                </svg>
-                                Processing...
-                            </>
-                        ) : (
-                            <>
-                                Pay Now
-                                <svg
-                                    className="w-4 h-4"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-                                    />
-                                </svg>
-                            </>
-                        )}
-                    </button>
-
-                </div>
-
+                <button
+                    type="button"
+                    onClick={handlePay}
+                    disabled={loading}
+                    className="w-full mt-6 bg-[#2563eb] hover:bg-[#1d4ed8] disabled:opacity-50 text-white font-semibold py-4 rounded-2xl"
+                >
+                    {loading ? "Processing…" : `Pay ₹${amount || "0"}`}
+                </button>
             </div>
-
-        </div>
+        </AppLayout>
     );
 }
 

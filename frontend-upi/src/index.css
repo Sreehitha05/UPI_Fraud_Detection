@@ -1,9 +1,60 @@
 @import "tailwindcss";
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
 * {
-  font-family: 'Inter', sans-serif;
+  font-family: "DM Sans", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+}
+
+.app-shell {
+  width: 100%;
+  max-width: 28rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.app-shell-wide {
+  width: 100%;
+  max-width: 72rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (orientation: landscape) and (min-width: 720px) {
+  .app-shell {
+    max-width: 56rem;
+  }
+
+  .home-landscape {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  .home-landscape-header {
+    grid-column: 1;
+    border-radius: 1.25rem;
+    margin-bottom: 0;
+    padding-bottom: 2rem;
+  }
+
+  .home-landscape-actions {
+    grid-column: 2;
+    margin-top: 0;
+    padding-top: 1rem;
+  }
+
+  .fraud-landscape-top {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .fraud-landscape-mid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
 }

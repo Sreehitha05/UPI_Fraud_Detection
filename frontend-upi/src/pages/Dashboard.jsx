@@ -1,768 +1,353 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
-import AlertBox from "../components/AlertBox";
+import AppLayout from "../components/AppLayout";
+import StatCard from "../components/StatCard";
+import {
+    fetchTransactions,
+    fetchAnalytics,
+    fetchFraudInfo,
+    fetchFraudReport
+} from "../services/api";
+import { statusLabel, statusStyle } from "../utils/statusLabels";
 
-const socket = io("http://localhost:5000");
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+function Panel({ title, children, className = "" }) {
+    return (
+        <section
+            className={`bg-[#0b1623] border border-[#1a2d42] rounded-xl p-5 ${className}`}
+        >
+            {title && (
+                <h2 className="text-sm font-semibold text-white mb-4">{title}</h2>
+            )}
+            {children}
+        </section>
+    );
+}
 
 function Dashboard() {
+    const navigate = useNavigate();
+    const [transactions, setTransactions] = useState([]);
+    const [analytics, setAnalytics] = useState(null);
+    const [fraudInfo, setFraudInfo] = useState(null);
+    const [report, setReport] = useState(null);
+    const [live, setLive] = useState(false);
+    const [tab, setTab] = useState("overview");
 
-    const [transactions, setTransactions] =
-        useState([]);
-
-    const [alert, setAlert] =
-        useState("");
-
-    useEffect(() => {
-
-        socket.on(
-            "newTransaction",
-            (data) => {
-                setTransactions((prev) => [
-                    data,
-                    ...prev
-                ]);
-
-                if (data.status === "BLOCKED") {
-                    setAlert(
-                        `Suspicious transaction of ₹${data.amount} blocked`
-                    );
-                    setTimeout(() => {
-                        setAlert("");
-                    }, 4000);
-                }
-            }
-        );
-
-        return () => {
-            socket.off("newTransaction");
-        };
-
+    const refresh = useCallback(async () => {
+        try {
+            const [txnRes, analyticsRes, infoRes, reportRes] = await Promise.all([
+                fetchTransactions(50),
+                fetchAnalytics(),
+                fetchFraudInfo(),
+                fetchFraudReport()
+            ]);
+            setTransactions(txnRes.data.transactions || []);
+            setAnalytics(analyticsRes.data);
+            setFraudInfo(infoRes.data);
+            setReport(reportRes.data);
+        } catch {
+            /* keep last data */
+        }
     }, []);
 
-    // STATS
-    const totalTransactions =
-        transactions.length;
+    const onNewTxn = useCallback(
+        (data) => {
+            setTransactions((prev) => {
+                const id = data._id?.toString();
+                if (id && prev.some((t) => t._id?.toString() === id)) return prev;
+                return [data, ...prev].slice(0, 100);
+            });
+            refresh();
+        },
+        [refresh]
+    );
 
-    const blockedTransactions =
-        transactions.filter(
-            txn => txn.status === "BLOCKED"
-        ).length;
+    useEffect(() => {
+        refresh();
+        const socket = io(API_URL);
+        socket.on("connect", () => setLive(true));
+        socket.on("disconnect", () => setLive(false));
+        socket.on("newTransaction", onNewTxn);
+        return () => {
+            socket.off("newTransaction", onNewTxn);
+            socket.disconnect();
+        };
+    }, [onNewTxn, refresh]);
 
-    const successfulTransactions =
-        transactions.filter(
-            txn => txn.status === "SUCCESS"
-        ).length;
-
-    const fraudRate =
-        totalTransactions > 0
-            ? ((blockedTransactions / totalTransactions) * 100).toFixed(1)
-            : "0.0";
+    const s = analytics?.summary;
+    const total = s?.total ?? 0;
+    const declined = s?.blocked ?? 0;
+    const declineRate = s?.fraudRate ?? "0";
 
     return (
-        <div
-            className="
-                min-h-screen
-                bg-[#060d17]
-                text-white
-                overflow-hidden
-                relative
-            "
-        >
-            {/* GLOW */}
-            <div
-                className="
-                    absolute
-                    top-0
-                    left-1/2
-                    -translate-x-1/2
-                    w-[800px]
-                    h-[300px]
-                    bg-blue-900/15
-                    blur-[120px]
-                    rounded-full
-                    pointer-events-none
-                "
-            />
-
-            {/* ALERT */}
-            {alert && <AlertBox message={alert} />}
-
-            {/* TOP NAV */}
-            <div
-                className="
-                    relative
-                    border-b
-                    border-[#1a2d42]
-                    px-6
-                    md:px-10
-                    py-5
-                    flex
-                    items-center
-                    justify-between
-                "
-            >
-                <div
-                    className="
-                        flex
-                        items-center
-                        gap-3
-                    "
-                >
-                    <div
-                        className="
-                            w-9
-                            h-9
-                            rounded-xl
-                            bg-[#0d2137]
-                            border
-                            border-blue-800/40
-                            flex
-                            items-center
-                            justify-center
-                        "
-                    >
-                        <svg
-                            className="w-5 h-5 text-blue-400"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={1.5}
-                        >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
-                            />
-                        </svg>
-                    </div>
-
+        <AppLayout variant="dark" wide showBack onBack={() => navigate("/home")}>
+            <div className="px-4 sm:px-6 py-5 pb-8">
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
                     <div>
-                        <h1
-                            className="
-                                text-[15px]
-                                font-600
-                                text-white
-                                tracking-tight
-                            "
-                        >
-                            SecurePay
+                        <h1 className="text-xl font-bold text-white">
+                            UPI fraud detection
                         </h1>
-                        <p
-                            className="
-                                text-[11px]
-                                text-slate-500
-                            "
-                        >
-                            Fraud Monitoring
+                        <p className="text-sm text-slate-500 mt-1">
+                            How payments are checked, scored, and declined
                         </p>
                     </div>
-                </div>
-
-                {/* LIVE INDICATOR */}
-                <div
-                    className="
-                        flex
-                        items-center
-                        gap-2
-                        bg-[#0b1623]
-                        border
-                        border-[#1a2d42]
-                        rounded-full
-                        px-4
-                        py-2
-                    "
-                >
-                    <div
-                        className="
-                            w-2
-                            h-2
-                            rounded-full
-                            bg-green-400
-                            animate-pulse
-                        "
-                    />
-                    <span
-                        className="
-                            text-[12px]
-                            text-green-400
-                            font-500
-                        "
-                    >
-                        Live
-                    </span>
-                </div>
-            </div>
-
-            {/* PAGE CONTENT */}
-            <div
-                className="
-                    relative
-                    px-6
-                    md:px-10
-                    py-8
-                "
-            >
-
-                {/* PAGE TITLE */}
-                <div className="mb-8">
-                    <h2
-                        className="
-                            text-[28px]
-                            font-700
-                            text-white
-                            tracking-tight
-                        "
-                    >
-                        Transaction Monitor
-                    </h2>
-                    <p
-                        className="
-                            text-[13px]
-                            text-slate-500
-                            mt-1
-                            font-400
-                        "
-                    >
-                        All incoming transactions are scanned in real-time
-                    </p>
-                </div>
-
-                {/* STAT CARDS */}
-                <div
-                    className="
-                        grid
-                        grid-cols-2
-                        md:grid-cols-4
-                        gap-4
-                        mb-8
-                    "
-                >
-
-                    {/* TOTAL */}
-                    <div
-                        className="
-                            bg-[#0b1623]
-                            border
-                            border-[#1a2d42]
-                            rounded-2xl
-                            p-5
-                            hover:border-blue-800/50
-                            transition-colors
-                            duration-200
-                        "
-                    >
-                        <p
-                            className="
-                                text-[11px]
-                                text-slate-500
-                                font-500
-                                uppercase
-                                tracking-wide
-                                mb-3
-                            "
-                        >
-                            Total
-                        </p>
-                        <p
-                            className="
-                                text-[32px]
-                                font-700
-                                text-white
-                                leading-none
-                                tracking-tight
-                            "
-                        >
-                            {totalTransactions}
-                        </p>
-                        <p
-                            className="
-                                text-[11px]
-                                text-slate-600
-                                mt-2
-                            "
-                        >
-                            transactions
-                        </p>
-                    </div>
-
-                    {/* SUCCESS */}
-                    <div
-                        className="
-                            bg-[#0b1623]
-                            border
-                            border-[#1a2d42]
-                            rounded-2xl
-                            p-5
-                            hover:border-green-900/50
-                            transition-colors
-                            duration-200
-                        "
-                    >
-                        <p
-                            className="
-                                text-[11px]
-                                text-slate-500
-                                font-500
-                                uppercase
-                                tracking-wide
-                                mb-3
-                            "
-                        >
-                            Success
-                        </p>
-                        <p
-                            className="
-                                text-[32px]
-                                font-700
-                                text-green-400
-                                leading-none
-                                tracking-tight
-                            "
-                        >
-                            {successfulTransactions}
-                        </p>
-                        <p
-                            className="
-                                text-[11px]
-                                text-slate-600
-                                mt-2
-                            "
-                        >
-                            payments
-                        </p>
-                    </div>
-
-                    {/* BLOCKED */}
-                    <div
-                        className="
-                            bg-[#0b1623]
-                            border
-                            border-[#1a2d42]
-                            rounded-2xl
-                            p-5
-                            hover:border-red-900/50
-                            transition-colors
-                            duration-200
-                        "
-                    >
-                        <p
-                            className="
-                                text-[11px]
-                                text-slate-500
-                                font-500
-                                uppercase
-                                tracking-wide
-                                mb-3
-                            "
-                        >
-                            Blocked
-                        </p>
-                        <p
-                            className="
-                                text-[32px]
-                                font-700
-                                text-red-400
-                                leading-none
-                                tracking-tight
-                            "
-                        >
-                            {blockedTransactions}
-                        </p>
-                        <p
-                            className="
-                                text-[11px]
-                                text-slate-600
-                                mt-2
-                            "
-                        >
-                            fraud attempts
-                        </p>
-                    </div>
-
-                    {/* FRAUD RATE */}
-                    <div
-                        className="
-                            bg-[#0b1623]
-                            border
-                            border-[#1a2d42]
-                            rounded-2xl
-                            p-5
-                            hover:border-yellow-900/50
-                            transition-colors
-                            duration-200
-                        "
-                    >
-                        <p
-                            className="
-                                text-[11px]
-                                text-slate-500
-                                font-500
-                                uppercase
-                                tracking-wide
-                                mb-3
-                            "
-                        >
-                            Fraud Rate
-                        </p>
-                        <p
-                            className="
-                                text-[32px]
-                                font-700
-                                text-yellow-400
-                                leading-none
-                                tracking-tight
-                            "
-                        >
-                            {fraudRate}%
-                        </p>
-                        <p
-                            className="
-                                text-[11px]
-                                text-slate-600
-                                mt-2
-                            "
-                        >
-                            of all txns
-                        </p>
-                    </div>
-
-                </div>
-
-                {/* TABLE HEADER */}
-                <div
-                    className="
-                        flex
-                        items-center
-                        justify-between
-                        mb-4
-                    "
-                >
-                    <h3
-                        className="
-                            text-[14px]
-                            font-600
-                            text-white
-                            tracking-tight
-                        "
-                    >
-                        Recent Transactions
-                    </h3>
-
-                    <span
-                        className="
-                            text-[12px]
-                            text-slate-500
-                            bg-[#0b1623]
-                            border
-                            border-[#1a2d42]
-                            px-3
-                            py-1
-                            rounded-full
-                        "
-                    >
-                        {totalTransactions} total
-                    </span>
-                </div>
-
-                {/* COLUMN LABELS - desktop */}
-                <div
-                    className="
-                        hidden
-                        md:grid
-                        grid-cols-5
-                        px-5
-                        pb-3
-                        border-b
-                        border-[#1a2d42]
-                        mb-2
-                    "
-                >
-                    {[
-                        "Sender",
-                        "Receiver",
-                        "Amount",
-                        "Fraud Score",
-                        "Status"
-                    ].map((col) => (
+                    <div className="flex gap-2 text-xs">
                         <span
-                            key={col}
-                            className="
-                                text-[11px]
-                                text-slate-600
-                                font-500
-                                uppercase
-                                tracking-wide
-                            "
+                            className={`px-2.5 py-1 rounded-full border ${
+                                live
+                                    ? "border-emerald-800/50 text-emerald-400"
+                                    : "border-slate-700 text-slate-500"
+                            }`}
                         >
-                            {col}
+                            {live ? "Live" : "Offline"}
                         </span>
+                        {fraudInfo?.modelReady && (
+                            <span className="px-2.5 py-1 rounded-full border border-blue-800/40 text-blue-400">
+                                ML on
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex gap-2 mb-5 overflow-x-auto">
+                    {[
+                        ["overview", "Overview"],
+                        ["how", "How it works"],
+                        ["rules", "Detection rules"],
+                        ["report", "Declined report"]
+                    ].map(([id, label]) => (
+                        <button
+                            key={id}
+                            type="button"
+                            onClick={() => setTab(id)}
+                            className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium ${
+                                tab === id
+                                    ? "bg-[#2563eb] text-white"
+                                    : "bg-[#0b1623] text-slate-400 border border-[#1a2d42]"
+                            }`}
+                        >
+                            {label}
+                        </button>
                     ))}
                 </div>
 
-                {/* TRANSACTIONS */}
-                <div className="space-y-2">
+                {tab === "overview" && (
+                    <div className="space-y-4 fraud-landscape-top">
+                        <Panel title="">
+                            <p className="text-4xl font-bold text-red-400">{declineRate}%</p>
+                            <p className="text-slate-400 text-sm mt-1">
+                                Decline rate — {declined} declined of {total} payments
+                            </p>
+                        </Panel>
 
-                    {transactions.map((txn, index) => (
-                        <div
-                            key={index}
-                            className={`
-                                bg-[#0b1623]
-                                border
-                                rounded-2xl
-                                px-5
-                                py-4
-                                transition-all
-                                duration-200
-                                hover:scale-[1.005]
-                                ${
-                                    txn.status === "BLOCKED"
-                                    ? "border-red-900/40 hover:border-red-800/60"
-                                    : "border-[#1a2d42] hover:border-blue-900/50"
-                                }
-                            `}
-                        >
-                            {/* MOBILE LAYOUT */}
-                            <div className="md:hidden space-y-3">
-                                <div
-                                    className="
-                                        flex
-                                        items-center
-                                        justify-between
-                                    "
-                                >
-                                    <div>
-                                        <p
-                                            className="
-                                                text-[11px]
-                                                text-slate-500
-                                                mb-0.5
-                                            "
-                                        >
-                                            {txn.sender}
-                                        </p>
-                                        <p
-                                            className="
-                                                text-[11px]
-                                                text-slate-600
-                                            "
-                                        >
-                                            → {txn.receiver}
-                                        </p>
-                                    </div>
-                                    <div
-                                        className={`
-                                            px-3
-                                            py-1
-                                            rounded-full
-                                            border
-                                            text-[11px]
-                                            font-500
-                                            ${
-                                                txn.status === "BLOCKED"
-                                                ? "bg-red-900/20 border-red-800/30 text-red-400"
-                                                : "bg-green-900/20 border-green-800/30 text-green-400"
-                                            }
-                                        `}
-                                    >
-                                        {txn.status}
-                                    </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <StatCard dark label="Total" value={total} accent="white" />
+                            <StatCard
+                                dark
+                                label="Successful"
+                                value={s?.success ?? 0}
+                                accent="green"
+                            />
+                            <StatCard
+                                dark
+                                label="On hold"
+                                value={s?.mfa ?? 0}
+                                accent="amber"
+                            />
+                            <StatCard
+                                dark
+                                label="Declined"
+                                value={declined}
+                                accent="red"
+                            />
+                            <StatCard
+                                dark
+                                label="Flagged rate"
+                                value={s?.flaggedRate ?? 0}
+                                suffix="%"
+                                accent="amber"
+                            />
+                            <StatCard
+                                dark
+                                label="Avg check"
+                                value={s?.avgLatencyMs ?? "—"}
+                                suffix={s?.avgLatencyMs != null ? "ms" : ""}
+                                accent="blue"
+                            />
+                        </div>
+
+                        <Panel title="All payments (live)">
+                            <TxnList items={transactions} />
+                        </Panel>
+                    </div>
+                )}
+
+                {tab === "how" && fraudInfo && (
+                    <div className="space-y-4 fraud-landscape-mid">
+                        <Panel title="Payment check — 4 steps">
+                            <ol className="space-y-4">
+                                {fraudInfo.decisionSteps.map((step) => (
+                                    <li key={step.step} className="flex gap-3">
+                                        <span className="w-7 h-7 shrink-0 rounded-full bg-blue-600/30 text-blue-300 text-sm font-bold flex items-center justify-center">
+                                            {step.step}
+                                        </span>
+                                        <div>
+                                            <p className="text-white font-medium text-sm">
+                                                {step.title}
+                                            </p>
+                                            <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                                                {step.detail}
+                                            </p>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ol>
+                        </Panel>
+
+                        <Panel title="Final decision (risk score)">
+                            <div className="space-y-3 text-sm">
+                                <div className="flex justify-between py-2 border-b border-[#1a2d42]">
+                                    <span className="text-emerald-400">Successful</span>
+                                    <span className="text-slate-400">
+                                        Score &lt; {fraudInfo.thresholds.allowBelow}
+                                    </span>
                                 </div>
-                                <div
-                                    className="
-                                        flex
-                                        items-center
-                                        justify-between
-                                    "
-                                >
-                                    <p
-                                        className="
-                                            text-[20px]
-                                            font-700
-                                            text-white
-                                            tracking-tight
-                                        "
-                                    >
-                                        ₹{txn.amount}
-                                    </p>
-                                    <p
-                                        className={`
-                                            text-[13px]
-                                            font-600
-                                            ${
-                                                txn.status === "BLOCKED"
-                                                ? "text-red-400"
-                                                : "text-green-400"
-                                            }
-                                        `}
-                                    >
-                                        Score: {txn.fraudScore}
-                                    </p>
+                                <div className="flex justify-between py-2 border-b border-[#1a2d42]">
+                                    <span className="text-amber-400">On hold</span>
+                                    <span className="text-slate-400">
+                                        {fraudInfo.thresholds.allowBelow} –{" "}
+                                        {fraudInfo.thresholds.holdBelow}
+                                    </span>
                                 </div>
-                            </div>
-
-                            {/* DESKTOP TABLE ROW */}
-                            <div
-                                className="
-                                    hidden
-                                    md:grid
-                                    grid-cols-5
-                                    items-center
-                                "
-                            >
-                                <p
-                                    className="
-                                        text-[13px]
-                                        text-slate-300
-                                        font-400
-                                        truncate
-                                        pr-4
-                                    "
-                                >
-                                    {txn.sender}
-                                </p>
-
-                                <p
-                                    className="
-                                        text-[13px]
-                                        text-slate-300
-                                        font-400
-                                        truncate
-                                        pr-4
-                                    "
-                                >
-                                    {txn.receiver}
-                                </p>
-
-                                <p
-                                    className="
-                                        text-[18px]
-                                        font-700
-                                        text-white
-                                        tracking-tight
-                                    "
-                                >
-                                    ₹{txn.amount}
-                                </p>
-
-                                <p
-                                    className={`
-                                        text-[15px]
-                                        font-600
-                                        ${
-                                            txn.status === "BLOCKED"
-                                            ? "text-red-400"
-                                            : "text-green-400"
-                                        }
-                                    `}
-                                >
-                                    {txn.fraudScore}
-                                </p>
-
-                                <div>
-                                    <span
-                                        className={`
-                                            inline-flex
-                                            items-center
-                                            gap-1.5
-                                            px-3
-                                            py-1.5
-                                            rounded-full
-                                            border
-                                            text-[11px]
-                                            font-500
-                                            ${
-                                                txn.status === "BLOCKED"
-                                                ? "bg-red-900/20 border-red-800/30 text-red-400"
-                                                : "bg-green-900/20 border-green-800/30 text-green-400"
-                                            }
-                                        `}
-                                    >
-                                        <span
-                                            className={`
-                                                w-1.5
-                                                h-1.5
-                                                rounded-full
-                                                ${
-                                                    txn.status === "BLOCKED"
-                                                    ? "bg-red-400"
-                                                    : "bg-green-400"
-                                                }
-                                            `}
-                                        />
-                                        {txn.status}
+                                <div className="flex justify-between py-2">
+                                    <span className="text-red-400">Declined</span>
+                                    <span className="text-slate-400">
+                                        Score ≥ {fraudInfo.thresholds.blockAtOrAbove}
                                     </span>
                                 </div>
                             </div>
+                            <p className="text-slate-500 text-xs mt-4">
+                                Final score = rule score + (ML score × 0.5), maximum 1.0.
+                                Declined payments are saved but money is not sent.
+                            </p>
+                        </Panel>
+                    </div>
+                )}
 
+                {tab === "rules" && fraudInfo && (
+                    <Panel title="What triggers a higher risk score">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead>
+                                    <tr className="text-slate-500 border-b border-[#1a2d42]">
+                                        <th className="pb-2 pr-4 font-medium">Rule</th>
+                                        <th className="pb-2 pr-4 font-medium">When</th>
+                                        <th className="pb-2 pr-4 font-medium">Impact</th>
+                                        <th className="pb-2 font-medium">Why it matters</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {fraudInfo.detectionRules.map((rule) => (
+                                        <tr
+                                            key={rule.id}
+                                            className="border-b border-[#1a2d42]/60"
+                                        >
+                                            <td className="py-3 pr-4 text-white font-medium">
+                                                {rule.title}
+                                            </td>
+                                            <td className="py-3 pr-4 text-slate-400">
+                                                {rule.check}
+                                            </td>
+                                            <td className="py-3 pr-4 text-blue-300 whitespace-nowrap">
+                                                {rule.scoreImpact}
+                                            </td>
+                                            <td className="py-3 text-slate-400">
+                                                {rule.declineRole}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
-                    ))}
+                    </Panel>
+                )}
 
-                    {/* EMPTY STATE */}
-                    {transactions.length === 0 && (
-                        <div
-                            className="
-                                flex
-                                flex-col
-                                items-center
-                                justify-center
-                                py-20
-                                text-center
-                            "
+                {tab === "report" && (
+                    <div className="space-y-4">
+                        <Panel
+                            title={`Declined payments (${report?.declined?.length ?? 0})`}
                         >
-                            <div
-                                className="
-                                    w-16
-                                    h-16
-                                    rounded-2xl
-                                    bg-[#0b1623]
-                                    border
-                                    border-[#1a2d42]
-                                    flex
-                                    items-center
-                                    justify-center
-                                    mb-5
-                                "
-                            >
-                                <svg
-                                    className="w-7 h-7 text-slate-600"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    strokeWidth={1.5}
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
-                                    />
-                                </svg>
-                            </div>
-                            <p
-                                className="
-                                    text-[14px]
-                                    font-500
-                                    text-slate-500
-                                "
-                            >
-                                Waiting for transactions
+                            {report?.declined?.length ? (
+                                <TxnList items={report.declined} showWhy />
+                            ) : (
+                                <p className="text-slate-500 text-sm">No declined payments yet.</p>
+                            )}
+                        </Panel>
+
+                        <Panel title={`On hold (${report?.onHold?.length ?? 0})`}>
+                            {report?.onHold?.length ? (
+                                <TxnList items={report.onHold} showWhy />
+                            ) : (
+                                <p className="text-slate-500 text-sm">None on hold.</p>
+                            )}
+                        </Panel>
+                    </div>
+                )}
+            </div>
+        </AppLayout>
+    );
+}
+
+function TxnList({ items, showWhy }) {
+    if (!items?.length) {
+        return (
+            <p className="text-slate-500 text-sm py-4 text-center">
+                No payments to show.
+            </p>
+        );
+    }
+
+    return (
+        <ul className="divide-y divide-[#1a2d42] max-h-[360px] overflow-y-auto">
+            {items.map((txn) => (
+                <li key={txn._id} className="py-3 first:pt-0">
+                    <div className="flex flex-wrap justify-between gap-2">
+                        <div>
+                            <p className="text-sm text-slate-300">
+                                {txn.sender}{" "}
+                                <span className="text-slate-600">→</span> {txn.receiver}
                             </p>
-                            <p
-                                className="
-                                    text-[12px]
-                                    text-slate-600
-                                    mt-1
-                                "
-                            >
-                                New transactions will appear here instantly
+                            <p className="text-lg font-bold text-white">₹{txn.amount}</p>
+                            <p className="text-[11px] text-slate-600">
+                                {txn.createdAt
+                                    ? new Date(txn.createdAt).toLocaleString("en-IN")
+                                    : ""}
                             </p>
                         </div>
+                        <div className="text-right">
+                            <span
+                                className={`text-xs px-2 py-1 rounded-full border ${statusStyle(txn.status, true)}`}
+                            >
+                                {statusLabel(txn.status)}
+                            </span>
+                            <p className="text-xs text-blue-400 mt-1">
+                                Risk {txn.fraudScore}
+                                {txn.ruleScore != null && ` · Rules ${txn.ruleScore}`}
+                                {txn.aiPrediction != null && ` · ML ${txn.aiPrediction}`}
+                            </p>
+                        </div>
+                    </div>
+                    {showWhy && txn.blockReason && (
+                        <p className="text-xs text-amber-200/80 mt-2 bg-amber-900/20 rounded-lg px-3 py-2 border border-amber-900/30">
+                            <span className="font-medium text-amber-400">Why: </span>
+                            {txn.blockReason}
+                        </p>
                     )}
-
-                </div>
-
-            </div>
-
-        </div>
+                </li>
+            ))}
+        </ul>
     );
 }
 
