@@ -56,6 +56,13 @@ export const verifyMpin = async (upiId, mpin) => {
     return hash === stored;
 };
 
+export const clearMpin = (upiId) => {
+    const mpins = readJson(MPIN_KEY, {});
+    const id = upiId.toLowerCase();
+    delete mpins[id];
+    writeJson(MPIN_KEY, mpins);
+};
+
 export const getBalance = (upiId) => {
     const balances = readJson(BALANCE_KEY, {});
     const id = upiId.toLowerCase();

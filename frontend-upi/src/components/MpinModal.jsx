@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-function MpinModal({ mode, onSubmit, onClose }) {
+function MpinModal({ mode, onSubmit, onClose, onForgot }) {
     const [mpin, setMpin] = useState("");
     const [confirm, setConfirm] = useState("");
     const [error, setError] = useState("");
@@ -81,6 +81,15 @@ function MpinModal({ mode, onSubmit, onClose }) {
                         {isSetup ? "Save MPIN" : "Confirm"}
                     </button>
 
+                    {!isSetup && onForgot && (
+                        <button
+                            type="button"
+                            onClick={onForgot}
+                            className="w-full py-2 text-blue-300 text-sm"
+                        >
+                            Forgot MPIN?
+                        </button>
+                    )}
                     {!isSetup && onClose && (
                         <button
                             type="button"

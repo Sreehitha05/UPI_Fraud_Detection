@@ -7,6 +7,7 @@ import {
     hasMpin,
     setMpin,
     verifyMpin,
+    clearMpin,
     getBalance,
     formatBalance
 } from "../utils/account";
@@ -82,6 +83,11 @@ function HomeHub() {
         setBalanceVisible(true);
     };
 
+    const handleForgotMpin = () => {
+        clearMpin(upiId);
+        setMpinMode("setup");
+    };
+
     const switchAccount = () => {
         localStorage.removeItem("upiId");
         localStorage.removeItem("mobile");
@@ -95,6 +101,7 @@ function HomeHub() {
                     mode={mpinMode}
                     onSubmit={handleMpinSubmit}
                     onClose={() => setMpinMode(null)}
+                    onForgot={handleForgotMpin}
                 />
             )}
 
